@@ -9,9 +9,8 @@ const MIRO_CLIENT_SECRET = '1hTnhLh6yzegpOuZCSTczV8JZm2ol62E';
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Expose-Headers': '*'
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
 };
 
 const server = http.createServer((req, res) => {
@@ -83,58 +82,12 @@ const server = http.createServer((req, res) => {
     return;
   }
   
-  // Handle Miro API proxy
-  if (parsedUrl.pathname.startsWith('/api/')) {
-    console.log(`Proxying ${req.method} ${parsedUrl.pathname}`);
-    
-    // Remove /api prefix and forward to Miro
-    const miroPath = parsedUrl.pathname.replace('/api', '');
-    
-    const options = {
-      hostname: 'api.miro.com',
-      port: 443,
-      path: '/v2' + miroPath + parsedUrl.search,
-      method: req.method,
-      headers: {
-        ...req.headers,
-        'host': 'api.miro.com',
-        'origin': undefined,
-        'referer': undefined
-      }
-    };
-    
-    // Remove problematic headers
-    delete options.headers['host'];
-    delete options.headers['connection'];
-    
-    const proxyReq = https.request(options, (proxyRes) => {
-      console.log(`Miro responded with ${proxyRes.statusCode}`);
-      
-      res.writeHead(proxyRes.statusCode, {
-        ...proxyRes.headers,
-        ...corsHeaders
-      });
-      
-      proxyRes.pipe(res);
-    });
-    
-    proxyReq.on('error', (err) => {
-      console.error('Proxy error:', err);
-      res.writeHead(500, corsHeaders);
-      res.end(JSON.stringify({ error: 'Proxy error' }));
-    });
-    
-    req.pipe(proxyReq);
-    return;
-  }
-  
   // Default response
   res.writeHead(404, corsHeaders);
   res.end(JSON.stringify({ error: 'Not found' }));
 });
 
 server.listen(PORT, () => {
-  console.log(`🔐 Miro Auth & API Proxy Server running on port ${PORT}`);
+  console.log(`🔐 Miro Auth Server running on port ${PORT}`);
   console.log(`📍 Token endpoint: http://localhost:${PORT}/token`);
-  console.log(`📍 API proxy: http://localhost:${PORT}/api/*`);
 });
