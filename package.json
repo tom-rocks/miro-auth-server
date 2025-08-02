@@ -1,0 +1,13 @@
+{
+  "name": "miro-auth-server",
+  "version": "1.0.0",
+  "description": "Simple OAuth token exchange server for Miro",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {}
+}
