@@ -10,7 +10,7 @@ const MIRO_CLIENT_SECRET = '1hTnhLh6yzegpOuZCSTczV8JZm2ol62E';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Expose-Headers': '*'
 };
 
@@ -86,7 +86,6 @@ const server = http.createServer((req, res) => {
   // Handle Miro API proxy
   if (parsedUrl.pathname.startsWith('/api/')) {
     console.log(`Proxying ${req.method} ${parsedUrl.pathname}`);
-    console.log('Headers:', req.headers);
     
     // Remove /api prefix and forward to Miro
     const miroPath = parsedUrl.pathname.replace('/api', '');
@@ -111,23 +110,18 @@ const server = http.createServer((req, res) => {
     const proxyReq = https.request(options, (proxyRes) => {
       console.log(`Miro responded with ${proxyRes.statusCode}`);
       
-      // Always include CORS headers
-      const responseHeaders = {
-        ...corsHeaders,
-        'content-type': proxyRes.headers['content-type'] || 'application/json'
-      };
+      res.writeHead(proxyRes.statusCode, {
+        ...proxyRes.headers,
+        ...corsHeaders
+      });
       
-      res.writeHead(proxyRes.statusCode, responseHeaders);
       proxyRes.pipe(res);
     });
     
     proxyReq.on('error', (err) => {
       console.error('Proxy error:', err);
-      res.writeHead(500, {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      });
-      res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+      res.writeHead(500, corsHeaders);
+      res.end(JSON.stringify({ error: 'Proxy error' }));
     });
     
     req.pipe(proxyReq);
