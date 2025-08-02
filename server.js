@@ -85,11 +85,14 @@ const server = http.createServer((req, res) => {
   
   // Handle Miro API proxy
   if (parsedUrl.pathname.startsWith('/api/')) {
-    console.log(`Proxying ${req.method} ${parsedUrl.pathname}`);
+    console.log(`Proxying ${req.method} ${req.url}`);
     console.log('Authorization header present:', !!req.headers.authorization);
     
     // Remove /api prefix and forward to Miro
-    const miroPath = parsedUrl.pathname.replace('/api', '');
+    // Use req.url to preserve the original encoding
+    const originalPath = req.url.split('?')[0];
+    const miroPath = originalPath.replace('/api', '');
+    const queryString = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
     
     // Only forward necessary headers
     const headers = {};
@@ -104,22 +107,32 @@ const server = http.createServer((req, res) => {
     const options = {
       hostname: 'api.miro.com',
       port: 443,
-      path: '/v2' + miroPath + parsedUrl.search,
+      path: '/v2' + miroPath + queryString,
       method: req.method,
       headers: headers
     };
     
     const proxyReq = https.request(options, (proxyRes) => {
-      console.log(`Miro responded with ${proxyRes.statusCode}`);
+      console.log(`Miro responded with ${proxyRes.statusCode} for ${options.path}`);
       
-      // Always include CORS headers
-      const responseHeaders = {
-        ...corsHeaders,
-        'content-type': proxyRes.headers['content-type'] || 'application/json'
-      };
+      // Collect the response body for error logging
+      let responseBody = '';
+      proxyRes.on('data', chunk => responseBody += chunk);
       
-      res.writeHead(proxyRes.statusCode, responseHeaders);
-      proxyRes.pipe(res);
+      proxyRes.on('end', () => {
+        if (proxyRes.statusCode >= 400) {
+          console.error('Miro API Error:', responseBody);
+        }
+        
+        // Always include CORS headers
+        const responseHeaders = {
+          ...corsHeaders,
+          'content-type': proxyRes.headers['content-type'] || 'application/json'
+        };
+        
+        res.writeHead(proxyRes.statusCode, responseHeaders);
+        res.end(responseBody);
+      });
     });
     
     proxyReq.on('error', (err) => {
@@ -131,7 +144,22 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
     });
     
-    req.pipe(proxyReq);
+    // Forward request body if present
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        if (body) {
+          options.headers['content-length'] = Buffer.byteLength(body);
+          proxyReq.setHeader('content-length', Buffer.byteLength(body));
+          proxyReq.write(body);
+        }
+        proxyReq.end();
+      });
+    } else {
+      proxyReq.end();
+    }
+    
     return;
   }
   
