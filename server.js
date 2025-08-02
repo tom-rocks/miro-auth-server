@@ -86,27 +86,28 @@ const server = http.createServer((req, res) => {
   // Handle Miro API proxy
   if (parsedUrl.pathname.startsWith('/api/')) {
     console.log(`Proxying ${req.method} ${parsedUrl.pathname}`);
-    console.log('Headers:', req.headers);
+    console.log('Authorization header present:', !!req.headers.authorization);
     
     // Remove /api prefix and forward to Miro
     const miroPath = parsedUrl.pathname.replace('/api', '');
+    
+    // Only forward necessary headers
+    const headers = {};
+    if (req.headers.authorization) {
+      headers.authorization = req.headers.authorization;
+    }
+    if (req.headers['content-type']) {
+      headers['content-type'] = req.headers['content-type'];
+    }
+    headers.accept = 'application/json';
     
     const options = {
       hostname: 'api.miro.com',
       port: 443,
       path: '/v2' + miroPath + parsedUrl.search,
       method: req.method,
-      headers: {
-        ...req.headers,
-        'host': 'api.miro.com',
-        'origin': undefined,
-        'referer': undefined
-      }
+      headers: headers
     };
-    
-    // Remove problematic headers
-    delete options.headers['host'];
-    delete options.headers['connection'];
     
     const proxyReq = https.request(options, (proxyRes) => {
       console.log(`Miro responded with ${proxyRes.statusCode}`);
